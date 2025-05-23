@@ -1,2 +1,6 @@
 /data
 /montreal_forced_aligner
+/emo_rank_tts/pretrained_models
+
+*.pyc
+*.wav
