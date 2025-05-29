@@ -2,6 +2,7 @@
 /montreal_forced_aligner
 /emo_rank_tts/pretrained_models
 /preprocessed/
+/experiments/
 
 *.pyc
 *.wav
