@@ -3,6 +3,8 @@
 /emo_rank_tts/pretrained_models
 /preprocessed/
 /experiments/
+/samsung_temp/
 
 *.pyc
 *.wav
+*.pdf
