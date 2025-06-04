@@ -1,0 +1,42 @@
+fastspeech2:
+  model:
+    enc_num_layers: 6
+    enc_num_head: 2
+    enc_d_model: 384
+    enc_ffn_dim: 1536
+    enc_k_dim: 384
+    enc_v_dim: 384
+    enc_dropout: 0.1
+    dec_num_layers: 6
+    dec_num_head: 2
+    dec_d_model: 384
+    dec_ffn_dim: 1536
+    dec_k_dim: 384
+    dec_v_dim: 384
+    dec_dropout: 0.1
+    normalize_before: False
+    ffn_type: '1dcnn'
+    ffn_cnn_kernel_size_list: [9, 1]
+    n_char: 95
+    n_mels: 80
+    postnet_embedding_dim: 512
+    postnet_kernel_size: 5
+    postnet_n_convolutions: 5
+    postnet_dropout: 0.5
+    padding_idx: 0
+    dur_pred_kernel_size: 3
+    pitch_pred_kernel_size: 3
+    energy_pred_kernel_size: 3
+    variance_predictor_dropout: 0.5
+  
+  loss:
+    log_scale_durations: True
+    ssim_loss_weight: 1.0
+    duration_loss_weight: 1.0
+    pitch_loss_weight: 1.0
+    energy_loss_weight: 1.0
+    mel_loss_weight: 1.0
+    postnet_mel_loss_weight: 1.0
+    # aligner_loss_weight: 1.0
+    spn_loss_weight: 0.0
+    spn_loss_max_epochs: 1
