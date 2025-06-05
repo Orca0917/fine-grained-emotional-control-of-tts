@@ -33,7 +33,7 @@ def remove_outliers(x):
 
 
 def normalize_field(preprocessed_path, speaker, emotion, field, mean, std):
-    paths = glob.glob(os.path.join(preprocessed_path, speaker, f'{emotion}_*.npz'))
+    paths = glob(os.path.join(preprocessed_path, speaker, f'{emotion}_*.npz'))
     global_min, global_max = np.inf, -np.inf
 
     for fp in paths:
@@ -54,7 +54,14 @@ def feature_extraction(
         speaker, 
         emotion,
         sampling_rate,
+        hop_length,
+        win_length, 
+        n_mels, 
+        n_fft, 
+        f_min, 
+        f_max,
         noise_symbol,
+        sil_phones,
         pitch_averaging,
         energy_averaging,
         tbar
@@ -63,20 +70,20 @@ def feature_extraction(
     pitch_scaler = StandardScaler()
     energy_scaler = StandardScaler()
     
-    wav_paths = glob.glob(os.path.join(corpus_path, speaker, f'{emotion}_*.wav'))
+    wav_paths = glob(os.path.join(corpus_path, speaker, f'{emotion}_*.wav'))
     for audio_path in wav_paths:
 
         tbar.update(1)
 
         audio_id = Path(audio_path).stem.split('_')[-1]
-        textgrid_path = os.path.join(textgrid_path, speaker, f'{emotion}_{audio_id}.TextGrid')
+        tgt_path = os.path.join(textgrid_path, speaker, f'{emotion}_{audio_id}.TextGrid')
         transcript_path = Path(os.path.join(corpus_path, speaker, f'{emotion}_{audio_id}.lab'))
 
         # check the path existence
-        if not Path(textgrid_path).exists():
+        if not os.path.exists(tgt_path):
             continue
-
-        phones, durations, start_t, end_t = process_textgrid(textgrid_path)
+        
+        phones, durations, start_t, end_t = process_textgrid(tgt_path, sampling_rate, hop_length, sil_phones)
 
         if start_t >= end_t:
             print(f"Invalid start/end: {audio_path}")
@@ -84,13 +91,13 @@ def feature_extraction(
 
         # trim audio
         y, sr = librosa.load(audio_path, sr=sampling_rate)
-        y = trim_audio(y, start_t, end_t)
+        y = trim_audio(y, start_t, end_t, sampling_rate)
 
         # transcript
         transcript = transcript_path.read_text().strip().replace(noise_symbol, '')
 
         # 1. pitch
-        pitch = get_pitch(y)
+        pitch = get_pitch(y, hop_length, sampling_rate)
         if np.count_nonzero(pitch) <= 1:
             print(f"Invalid pitch: {audio_path}")
             continue
@@ -105,7 +112,7 @@ def feature_extraction(
         pitch = interp_fn(np.arange(0, len(pitch)))
         
         # 2. melspectrogram, energy
-        mel, energy = get_mel(y)
+        mel, energy = get_mel(y, sampling_rate, hop_length, win_length, n_mels, n_fft, f_min, f_max)
         mel, energy = mel.numpy(), energy.numpy()
         mel = mel[:, :sum(durations)]
         energy = energy[:sum(durations)]
@@ -134,7 +141,7 @@ def feature_extraction(
             audio_id=audio_id,
             audio_path=audio_path,
             transcript=transcript,
-            textgrid_path=textgrid_path,
+            textgrid_path=tgt_path,
             
             # inputs
             mel=mel,
@@ -174,7 +181,7 @@ def prepare_data_lists(
     for speaker in speakers:
 
         # neutral audio ids per speaker
-        neu_paths = glob.glob(os.path.join(preprocessed_path, speaker, f'neutral_*.npz'))
+        neu_paths = glob(os.path.join(preprocessed_path, speaker, f'neutral_*.npz'))
         neu_ids = [os.path.basename(neu_path)[:-4].split('_')[-1] for neu_path in neu_paths]
         neu_ids = sorted(neu_ids)
 
@@ -183,7 +190,7 @@ def prepare_data_lists(
             if emotion == 'neutral':
                 continue
 
-            emo_paths = glob.glob(os.path.join(preprocessed_path, speaker, f'{emotion}_*.npz'))
+            emo_paths = glob(os.path.join(preprocessed_path, speaker, f'{emotion}_*.npz'))
             emo_ids = [os.path.basename(emo_path)[:-4].split('_')[-1] for emo_path in emo_paths]
             emo_ids = sorted(emo_ids)
 
@@ -226,21 +233,30 @@ def prepare_data_lists(
 
 
 if __name__ == '__main__':
-    config = yaml.safe_load(open('config.yaml'))
+    config = yaml.safe_load(open('parameter.yaml'))
     data_path           = config['path']['data_path']
     corpus_path         = config['path']['corpus_path']
     textgrid_path       = config['path']['textgrid_path']
     preprocessed_path   = config['path']['preprocessed_path']
+
+    sampling_rate       = config['audio']['sampling_rate']
+    hop_length          = config['audio']['hop_length']
+    win_length          = config['audio']['win_length']
+    n_mels              = config['audio']['n_mels']
+    n_fft               = config['audio']['n_fft']
+    f_min               = config['audio']['f_min']
+    f_max               = config['audio']['f_max']
+
     speakers            = config['preprocessing']['speakers']
     emotions            = config['preprocessing']['emotions']
     noise_symbol        = config['preprocessing']['noise_symbol']
-    sampling_rate       = config['preprocessing']['sampling_rate']
+    sil_phones          = config['preprocessing']['sil_phones']
     pitch_averaging     = config['preprocessing']['pitch_averaging']
     energy_averaging    = config['preprocessing']['energy_averaging']
+    match_transcript    = config['preprocessing']['match_transcript']
 
     total_wavs = len(glob(os.path.join(corpus_path, '*', '*.wav')))
     tbar = tqdm(total=total_wavs, desc='Processing audio files')
-
 
     # feature extraction
     for speaker in speakers:
@@ -255,12 +271,12 @@ if __name__ == '__main__':
 
             # mel, energy, pitch, durations
             feature_extraction(
-                corpus_path, textgrid_path, preprocessed_path,
-                speaker, emotion, sampling_rate, noise_symbol,
+                corpus_path, textgrid_path, preprocessed_path, speaker, emotion, sampling_rate, 
+                hop_length, win_length, n_mels, n_fft, f_min, f_max, noise_symbol, sil_phones,
                 pitch_averaging, energy_averaging, tbar)
 
     tbar.close()
 
 
     # create train, valid datasets
-    prepare_data_lists()
+    prepare_data_lists(preprocessed_path, speakers, emotions, match_transcript)

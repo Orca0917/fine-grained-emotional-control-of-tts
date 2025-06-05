@@ -1,0 +1,4 @@
+tgt
+pyworld
+speechbrain
+rich

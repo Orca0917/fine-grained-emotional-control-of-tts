@@ -1,9 +1,9 @@
 import os
 import yaml
 import librosa
-from tqdm import tqdm
+from tqdm.rich import tqdm
 from glob import glob
-from text import _clean_text
+from speechbrain.utils.text_to_sequence import _clean_text
 from scipy.io.wavfile import write
 
 
@@ -30,7 +30,8 @@ def prepare_audio_transcript_pairs(data_path, noise_symbol):
 
 
 def prepare_mfa(data_path, corpus_path, speakers, emotions, sr, transcript):
-    for speaker in tqdm.tqdm(speakers):
+
+    for speaker in tqdm(speakers):
         for emotion in emotions:
 
             # check the path existence: josh has only three emotions
@@ -39,11 +40,11 @@ def prepare_mfa(data_path, corpus_path, speakers, emotions, sr, transcript):
                 continue
             
             # resample and create .lab file
-            for wav_path in glob.glob(os.path.join(spk_emo_path, '*.wav')):
+            for wav_path in glob(os.path.join(spk_emo_path, '*.wav')):
 
                 y, sr = librosa.load(wav_path, sr=sr)
 
-                audio_id = os.path.basename(wav_path)[:-4]
+                audio_id = os.path.basename(wav_path)[-8:-4]
                 text = transcript[audio_id]
 
                 os.makedirs(os.path.join(corpus_path, speaker), exist_ok=True)
@@ -59,14 +60,14 @@ def prepare_mfa(data_path, corpus_path, speakers, emotions, sr, transcript):
 if __name__ == '__main__':
 
     # Load configuration
-    config = yaml.safe_load(open('config.yaml'))
+    config = yaml.safe_load(open('parameter.yaml'))
 
     data_path       = config['path']['data_path']
     corpus_path     = config['path']['corpus_path']
+    sampling_rate   = config['audio']['sampling_rate']
     speakers        = config['preprocessing']['speakers']
     emotions        = config['preprocessing']['emotions']
     noise_symbol    = config['preprocessing']['noise_symbol']
-    sampling_rate   = config['preprocessing']['sampling_rate']
 
     # Prepare audio-transcript pairs
     audio_id_to_transcript = prepare_audio_transcript_pairs(data_path, noise_symbol)
