@@ -42,7 +42,7 @@ train:
   n_epochs:           100
   max_iterations:     250000
   batch_size:         16
-  learning_rate:      0.000001
+  learning_rate:      0.0001
 
 
 ##############################################

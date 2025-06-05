@@ -14,25 +14,27 @@ from util import batch_to_device, plot_fastspeech2_melspecs, increment_path
 def train_one_epoch(dataloader, model, criterion, optim, device, epoch, exp_path, writer):
     model.train()
     
+    pbar = tqdm(dataloader, desc=f'Epoch {epoch + 1}', unit='batch')
     epoch_avg_loss = defaultdict(float)
 
     for idx, batch in enumerate(tqdm(dataloader)):
-        batch = batch_to_device(batch, device)
 
+        batch = batch_to_device(batch, device)
         phoneme, speakers, phon_len, mel_target, target_pitch, target_energy, target_duration, mel_length, labels, wavs = batch
 
-        # Forward pass
+        # forward pass
         predictions = model(phoneme, speakers, target_duration, target_pitch, target_energy)
 
-        # Compute loss
+        # compute loss
         targets = (mel_target, target_duration, target_pitch, target_energy, mel_length, phon_len)
         loss = criterion(predictions, targets, epoch)
 
+        # backward pass
         optim.zero_grad()
         loss['total_loss'].backward()
         optim.step()
 
-        # Accumulate loss
+        # accumulate loss
         for loss_name, loss_value in loss.items():
             epoch_avg_loss[loss_name] += loss_value
 
@@ -41,7 +43,16 @@ def train_one_epoch(dataloader, model, criterion, optim, device, epoch, exp_path
             y_melspecs = mel_target.cpu().detach().numpy()
             plot_fastspeech2_melspecs(melspecs, y_melspecs, epoch, exp_path)
 
+        pbar.set_postfix(
+            total_loss="{:.04f}".format(loss['total_loss'].item()),
+            mel_loss="{:.04f}".format(loss['mel_loss'].item()),
+            pitch_loss="{:.04f}".format(loss['pitch_loss'].item()),
+            dur_loss="{:.04f}".format(loss['dur_loss'].item()),
+        )
     
+    pbar.close()
+
+    # tensorboard logging
     epoch_avg_loss = {k: v / len(dataloader) for k, v in epoch_avg_loss.items()}
     for k, v in epoch_avg_loss.items():
         writer.add_scalar(f'Loss/{k}', v, epoch)
