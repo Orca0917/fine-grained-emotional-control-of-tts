@@ -34,7 +34,7 @@ def batch_to_device(batch, device):
 
 def plot_fastspeech2_melspecs(melspecs, y_melspecs, epoch, exp_path):
 
-    all_melspecs = np.concatenate((melspecs, y_melspecs), axis=0)
+    all_melspecs = np.concatenate((melspecs[:8, :, :], y_melspecs[:8, :, :]), axis=0)
     
     fig, axes = plt.subplots(4, 4, figsize=(16, 10))
     for ax_idx, (ax, mel) in enumerate(zip(axes.flatten(), all_melspecs)):
