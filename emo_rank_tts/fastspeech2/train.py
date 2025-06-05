@@ -17,7 +17,7 @@ def train_one_epoch(dataloader, model, criterion, optim, device, epoch, exp_path
     pbar = tqdm(dataloader, desc=f'Epoch {epoch + 1}', unit='batch')
     epoch_avg_loss = defaultdict(float)
 
-    for idx, batch in enumerate(tqdm(dataloader)):
+    for idx, batch in enumerate(pbar):
 
         batch = batch_to_device(batch, device)
         phoneme, speakers, phon_len, mel_target, target_pitch, target_energy, target_duration, mel_length, labels, wavs = batch
