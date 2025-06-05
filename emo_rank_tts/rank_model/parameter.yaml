@@ -71,5 +71,5 @@ misc:
 ##############################################
 inference:
   mode:               'bucketize'     # 'bucketize' or 'inference'
-  best_pth_path:      '/workspace/experiment/exp_5/best_model.pth'
-  buckete_size:       3
+  best_pth_path:      '/workspace/experiments/exp_5/best_model.pth'
+  bucket_size:       3
