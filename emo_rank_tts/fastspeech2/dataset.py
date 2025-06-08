@@ -91,9 +91,13 @@ class TextMelCollateWithAlignment:
         pitch_padded.zero_()
         energy_padded = torch.FloatTensor(len(batch), max_target_len)
         energy_padded.zero_()
+        rank_X = torch.FloatTensor(len(batch), num_mels + 2, max_target_len)
+        rank_X.zero_()
         output_lengths = torch.LongTensor(len(batch))
-        labels, wavs = [], []
         speakers = torch.LongTensor(len(batch))
+        emotions = torch.LongTensor(len(batch))
+        labels, wavs = [], []
+
 
         for i in range(len(ids_sorted_decreasing)):
             idx = ids_sorted_decreasing[i]
@@ -107,6 +111,10 @@ class TextMelCollateWithAlignment:
             labels.append(batch[idx]['text'])
             wavs.append(batch[idx]['audio_path'])
             speakers[i] = batch[idx]['speaker']
+            emotions[i] = batch[idx]['emotion']
+
+            rank_X[i, :, :mel.size(1)] = torch.cat(
+                (mel, pitch.unsqueeze(0), energy.unsqueeze(0)), dim=0)
 
         mel_padded = mel_padded.permute(0, 2, 1)
         return (
@@ -120,6 +128,8 @@ class TextMelCollateWithAlignment:
             output_lengths,
             labels,
             wavs,
+            rank_X,
+            emotions,
         )
     
 

@@ -58,7 +58,7 @@ def bucketize(config):
 
     model.eval()
     with torch.no_grad():
-        for batch in tqdm(dataloader):
+        for batch in tqdm(dataloader, dynamic_ncols=True):
 
             emo_X = batch['emo_X'].to(device)
             neu_X = batch['neu_X'].to(device)

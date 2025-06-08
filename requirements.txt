@@ -1,4 +1,7 @@
+librosa
+rich
+speechbrain
 tgt
 pyworld
-speechbrain
-rich
+matplotlib
+tensorboard

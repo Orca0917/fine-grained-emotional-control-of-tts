@@ -29,12 +29,17 @@ def batch_to_device(batch, device):
         batch[7].to(device),  # output_lengths
         batch[8],             # labels (strings)
         batch[9],             # wavs (file paths)
+        batch[10].to(device), # rank_X
+        batch[11].to(device), # emotion
     )
 
 
 def plot_fastspeech2_melspecs(melspecs, y_melspecs, epoch, exp_path):
 
-    all_melspecs = np.concatenate((melspecs[:8, :, :], y_melspecs[:8, :, :]), axis=0)
+    melspecs = melspecs[:8, :, :]
+    y_melsspecs = y_melspecs[:8, :, :]
+
+    all_melspecs = np.concatenate((melspecs, y_melspecs), axis=0)
     
     fig, axes = plt.subplots(4, 4, figsize=(16, 10))
     for ax_idx, (ax, mel) in enumerate(zip(axes.flatten(), all_melspecs)):
