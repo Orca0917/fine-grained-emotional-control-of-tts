@@ -347,7 +347,8 @@ class FastSpeech2(nn.Module):
         )
         token_feats = token_feats * srcmask_inverted    # (B, T, D)
         
-        # ---------- modification area ----------
+
+        # -------------------- modification area --------------------
         
         speaker_emb = self.speaker_emb(speakers).unsqueeze(1)
         speaker_emb = speaker_emb.expand(-1, token_feats.shape[1], -1)  # (B, T, D)
@@ -358,7 +359,9 @@ class FastSpeech2(nn.Module):
         )   # (B, T, D + D + 256)
         token_feats = self.concat_proj(x)
         token_feats = token_feats * srcmask_inverted  # (B, T, D)
-        # ---------- modification area end ----------
+
+        # -------------------- modification area end --------------------
+
 
         # duration predictor
         predict_durations = self.durPred(token_feats, srcmask_inverted).squeeze(

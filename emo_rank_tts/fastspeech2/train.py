@@ -170,6 +170,11 @@ def train(config):
         train_one_epoch(dataloader, model, rank_model, criterion, optimizer, device,
                         epoch, exp_path, writer)
         
+        # TODO: validation step, synthesize with vocoder
+
+        # TODO: save best model
+
+
         global_step += len(dataloader)
 
     pass
