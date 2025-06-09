@@ -7,6 +7,7 @@ path:
   textgrid_path:      '/workspace/montreal_forced_aligner/aligned'
   preprocessed_path:  '/workspace/preprocessed'
   experiment_path:    '/workspace/experiments/fastspeech2'
+  vocoder_path:       '/workspace/pretrained_models/tts-hifigan-libritts-16kHz'
 
 
 ##############################################
