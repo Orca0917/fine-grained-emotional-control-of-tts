@@ -19,7 +19,7 @@ def train_one_epoch(dataloader, model, criterion, epoch, optim, writer, device):
     
     model.train()
 
-    pbar = tqdm(dataloader, desc=f'Epoch {epoch + 1}', unit='batch')
+    pbar = tqdm(dataloader, desc=f'Epoch {epoch + 1}', unit='batch', dynamic_ncols=True)
     losses, mixup_losses, rank_losses = [], [], []
 
     for batch in pbar:
@@ -75,7 +75,7 @@ def validate_one_epoch(dataloader, model, criterion, epoch, writer, device,
     n_emotions = len(emotions)
     n_speakers = len(speakers)
 
-    pbar = tqdm(dataloader, desc=f'Epoch {epoch + 1}', unit='batch')
+    pbar = tqdm(dataloader, desc=f'Epoch {epoch + 1}', unit='batch', dynamic_ncols=True)
     losses, mixup_losses, rank_losses = [], [], []
     h_list, label_list, speaker_list, lam_list = [], [], [], []
 
@@ -168,7 +168,7 @@ def validate_one_epoch(dataloader, model, criterion, epoch, writer, device,
     ax.grid(True, linestyle='--', alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(exp_path, f'tsne_epoch_{epoch}.png'))
+    plt.savefig(os.path.join(exp_path, f'tsne_epoch_{epoch + 1}.png'))
     plt.close()
 
     return avg_loss
@@ -211,14 +211,14 @@ def train(config):
         batch_size=batch_size,
         shuffle=True,
         collate_fn=collate_fn,
-        num_workers=4,
+        num_workers=2,
     )
     valid_dataloader = torch.utils.data.DataLoader(
         valid_dataset,
         batch_size=batch_size,
         shuffle=False,
         collate_fn=collate_fn,
-        num_workers=4,
+        num_workers=2,
     )
 
 

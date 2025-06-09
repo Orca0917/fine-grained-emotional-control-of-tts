@@ -6,7 +6,7 @@ path:
   corpus_path:        '/workspace/montreal_forced_aligner/corpus'
   textgrid_path:      '/workspace/montreal_forced_aligner/aligned'
   preprocessed_path:  '/workspace/preprocessed'
-  experiment_path:    '/workspace/experiments'
+  experiment_path:    '/workspace/experiments/rank_model'
 
 
 ##############################################
@@ -62,7 +62,7 @@ model:
 # 6. Miscellaneous
 ##############################################
 misc:
-  markers:             ['o', '^', 's', 'd']
+  markers:            ['o', '^', 's', 'd']
   colors:             ['#7C00FE', '#F9E400', '#FFAF00', '#F5004F', '#00B2A9']
 
 
@@ -71,5 +71,5 @@ misc:
 ##############################################
 inference:
   mode:               'bucketize'     # 'bucketize' or 'inference'
-  best_pth_path:      '/workspace/experiments/exp_5/best_model.pth'
-  bucket_size:       3
+  best_pth_path:      '/workspace/experiments/rank_model/exp_1/best_model.pth'
+  bucket_size:        3

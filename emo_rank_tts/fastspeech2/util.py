@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import speechbrain
 
+
 SIL_PHONES = ['sil', 'spn', 'sp', '']
 VALID_TOKENS = ['@'] + speechbrain.utils.text_to_sequence.valid_symbols + SIL_PHONES
 
@@ -29,12 +30,17 @@ def batch_to_device(batch, device):
         batch[7].to(device),  # output_lengths
         batch[8],             # labels (strings)
         batch[9],             # wavs (file paths)
+        batch[10].to(device), # rank_X
+        batch[11].to(device), # emotion
     )
 
 
-def plot_fastspeech2_melspecs(melspecs, y_melspecs, epoch, exp_path):
+def plot_fastspeech2_melspecs(melspecs, y_melspecs, epoch, exp_path, train=True):
 
-    all_melspecs = np.concatenate((melspecs[:8, :, :], y_melspecs[:8, :, :]), axis=0)
+    melspecs = melspecs[:8, :, :]
+    y_melsspecs = y_melspecs[:8, :, :]
+
+    all_melspecs = np.concatenate((melspecs, y_melspecs), axis=0)
     
     fig, axes = plt.subplots(4, 4, figsize=(16, 10))
     for ax_idx, (ax, mel) in enumerate(zip(axes.flatten(), all_melspecs)):
@@ -57,7 +63,7 @@ def plot_fastspeech2_melspecs(melspecs, y_melspecs, epoch, exp_path):
         )
     
     plt.tight_layout()
-    save_path = os.path.join(exp_path, f"epoch_{epoch}.png")
+    save_path = os.path.join(exp_path, f"epoch_{epoch}.png" if train else f"valid_epoch_{epoch}.png")
     plt.savefig(save_path, bbox_inches='tight', dpi=300)
     plt.close(fig)
 
@@ -71,3 +77,21 @@ def increment_path(base_path):
             os.makedirs(path)
             return path
         exp_num += 1
+
+
+def synthesize_sample(vocoder, melspecs, y_melspecs, exp_path, epoch):
+    melspecs = melspecs[:8, :, :]
+    y_melspecs = y_melspecs[:8, :, :]
+
+    for i, (mel, y_mel) in enumerate(zip(melspecs, y_melspecs)):
+        mel = mel.unsqueeze(0)
+        y_mel = y_mel.unsqueeze(0)
+
+        wav = vocoder.decode_batch(mel)
+        y_wav = vocoder.decode_batch(y_mel)
+
+        wav_path = os.path.join(exp_path, f'epoch_{epoch}_sample_{i + 1}_pred.wav')
+        y_wav_path = os.path.join(exp_path, f'epoch_{epoch}_sample_{i + 1}_gt.wav')
+
+        speechbrain.utils.dataio.write_audio(wav_path, wav.squeeze(0), 22050)
+        speechbrain.utils.dataio.write_audio(y_wav_path, y_wav.squeeze(0), 22050)

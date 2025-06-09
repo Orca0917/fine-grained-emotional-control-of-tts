@@ -256,7 +256,7 @@ if __name__ == '__main__':
     match_transcript    = config['preprocessing']['match_transcript']
 
     total_wavs = len(glob(os.path.join(corpus_path, '*', '*.wav')))
-    tbar = tqdm(total=total_wavs, desc='Processing audio files')
+    tbar = tqdm(total=total_wavs, desc='Processing audio files', dynamic_ncols=True)
 
     # feature extraction
     for speaker in speakers:
