@@ -1,4 +1,3 @@
-import json
 import yaml
 import torch
 
@@ -25,27 +24,27 @@ def bucketize(config):
 
     model_path          = config['inference']['best_pth_path']
     bucket_size         = config['inference']['bucket_size']
-    speakers            = config['preprocessing']['speakers']
-    emotions            = config['preprocessing']['emotions']
+    speaker_list        = config['preprocessing']['speakers']
+    emotion_list        = config['preprocessing']['emotions']
     preprocessed_path   = config['path']['preprocessed_path']
 
     n_mels              = config['audio']['n_mels']
     n_heads             = config['model']['n_heads']
-    n_speakers          = len(speakers)
-    n_emotions          = len(emotions)
+    n_spk               = len(speaker_list)
+    n_emo               = len(emotion_list)
     n_encoder_layers    = config['model']['n_encoder_layers']
     hidden_dim          = config['model']['hidden_dim']
     kernel_size         = config['model']['kernel_size']
     dropout             = config['model']['dropout']
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = FineGraindModel(n_mels, n_heads, n_speakers, n_emotions, n_encoder_layers,
+    model = FineGraindModel(n_mels, n_heads, n_spk, n_emo, n_encoder_layers,
                             hidden_dim, kernel_size, dropout)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model = model.to(device)
 
 
-    dataset = FineGrainedDataset(preprocessed_path, speakers, emotions, split='train')
+    dataset = FineGrainedDataset(preprocessed_path, speaker_list, emotion_list, split='train')
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=8,
@@ -54,59 +53,61 @@ def bucketize(config):
         num_workers=4,
     )
 
-    intensity_representations = {speaker: {emotion: [] for emotion in emotions} for speaker in speakers}
+    intensity_storage = {spk: {emo: [] for emo in emotion_list} for spk in speaker_list}
 
     model.eval()
     with torch.no_grad():
         for batch in tqdm(dataloader, dynamic_ncols=True):
 
-            emo_X = batch['emo_X'].to(device)
-            neu_X = batch['neu_X'].to(device)
-            speaker = batch['speakers'].to(device)
-            emotion = batch['emotions'].to(device)
-            length = batch['length'].to(device)
-            targets = (emotion, torch.full_like(emotion, 0, device=device))
-
+            emo_X       = batch['emo_X'].to(device)
+            neu_X       = batch['neu_X'].to(device)
+            spk_ids     = batch['speakers'].to(device)
+            emo_ids     = batch['emotions'].to(device)
+            length      = batch['length'].to(device)
             B = emo_X.size(0)
-            lambda_i = torch.ones(B, device=device)
-            lambda_j = torch.zeros(B, device=device)
-            lambdas = torch.stack([lambda_i, lambda_j], dim=0)  # (2, B)
 
-            # forward pass
-            predictions = model(emo_X, neu_X, emotion, length, lambdas)
-            _, _, h, _, _, _, r, _ = predictions
 
-            r = r.squeeze(-1)
-            h = h.detach().cpu().numpy()
+            lambdas = torch.ones((2, B), device=device)
+            _, _, I, _, _, _, r, _ = model(emo_X, neu_X, emo_ids, length, lambdas)
+
+            # NumPy 변환
+            I = I.detach().cpu().numpy()  # (B, T_mel, n_emotion)
+            r = r.detach().cpu().numpy()  # (B)
 
             for i in range(B):
-                speaker_name = speakers[speaker[i].item()]
-                emotion_name = emotions[emotion[i].item()]
-                intensity_representations[speaker_name][emotion_name].append((r[i].item(), h[i]))
+                spk = speaker_list[spk_ids[i].item()]
+                emo = emotion_list[emo_ids[i].item()]
+                T_mel = length[i].item()
+                intensity_storage[spk][emo].append((r[i], I[i, :T_mel, :]))
 
+    # prototype 저장용 배열
+    intensity_representations = np.zeros(
+        (n_spk, n_emo, bucket_size, n_emo), dtype=np.float32
+    )
 
-    # speaker의 emotion별로 (r, h) 쌍을 r을 기준으로 3개의 bin으로 만들고 각 bin의 평균 h를 구함
-    result = {speaker: {emotion: [] for emotion in emotions} for speaker in speakers}
-    for speaker in speakers:
-        for emotion in emotions:
-            values = intensity_representations[speaker][emotion]
-            if not values:
+    # binning & 평균 계산
+    for spk_idx, spk in enumerate(speaker_list):
+        for emo_idx, emo in enumerate(emotion_list):
+            vals = intensity_storage[spk][emo]
+
+            if not vals:
                 continue
 
-            # r 값을 기준으로 정렬
-            values.sort(key=lambda x: x[0])
-            r_values, h_values = zip(*values)
+            # score 기준 정렬
+            vals.sort(key=lambda x: x[0])
+            _, h_vals = zip(*vals)
 
-            # 3개의 bin으로 나누기
-            bin_size = len(r_values) // bucket_size
-            h_means = [sum(h_values[i:i + bin_size]) / bin_size for i in range(0, len(h_values), bin_size)]
+            h_vals = np.concatenate(h_vals, axis=0)
 
-            result[speaker][emotion] = h_means[:bucket_size]
+            # 인덱스를 3등분
+            splits = np.array_split(np.arange(len(h_vals)), bucket_size)
+            for bin_idx, idxs in enumerate(splits):
+                h_mean = h_vals[idxs].mean(axis=0)
+                intensity_representations[spk_idx, emo_idx, bin_idx] = h_mean
 
-
-    # npz 저장
-    np.savez('result.npz', intensity=result)
-    print("Bucketization complete. Results saved to 'result.npz'.")
+    # 결과 저장
+    np.save('intensity.npy', intensity_representations)
+    print("Bucketization complete. Results saved to 'intensity.npy'.")
 
 
 if __name__ == '__main__':

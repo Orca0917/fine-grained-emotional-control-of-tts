@@ -26,7 +26,7 @@ preprocessing:
 # 3. Audio (optimized for vocoder)
 ##############################################
 audio:
-  sampling_rate:      24000
+  sampling_rate:      16000
   hop_length:         256
   win_length:         1024
   n_fft:              1024
@@ -40,8 +40,8 @@ audio:
 ##############################################
 train:
   n_epohcs:           100
-  max_iterations:     20000
-  batch_size:         16
+  max_iterations:     200000
+  batch_size:         32
   learning_rate:      0.000001
 
 
@@ -49,9 +49,9 @@ train:
 # 5. Model
 ##############################################
 model:
-  n_encoder_layers:   4
+  n_encoder_layers:   6
   n_heads:            2
-  hidden_dim:         256
+  hidden_dim:         384
   kernel_size:        9
   dropout:            0.1
   alpha:              0.1
@@ -71,5 +71,5 @@ misc:
 ##############################################
 inference:
   mode:               'bucketize'     # 'bucketize' or 'inference'
-  best_pth_path:      '/workspace/experiments/rank_model/exp_1/best_model.pth'
+  best_pth_path:      '/workspace/experiments/rank_model/exp_5/best_model.pth'
   bucket_size:        3

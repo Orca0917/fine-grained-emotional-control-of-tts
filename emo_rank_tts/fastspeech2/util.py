@@ -1,11 +1,27 @@
 import os
+import torchaudio
+import speechbrain
 import numpy as np
 import matplotlib.pyplot as plt
-import speechbrain
+from speechbrain.utils.text_to_sequence import _clean_text
+from speechbrain.inference.text import GraphemeToPhoneme
 
 
 SIL_PHONES = ['sil', 'spn', 'sp', '']
 VALID_TOKENS = ['@'] + speechbrain.utils.text_to_sequence.valid_symbols + SIL_PHONES
+
+def text2sequence(text):
+    phoneme = text2phoneme(text)
+    sequence = phoneme2sequence(phoneme)
+    return sequence
+
+
+def text2phoneme(text):
+    g2p = GraphemeToPhoneme.from_hparams("speechbrain/soundchoice-g2p")
+    text = _clean_text(text, ['english_cleaners'])
+    phoneme = g2p(text)
+    phoneme = [token for token in phoneme if token in VALID_TOKENS]
+    return phoneme
 
 
 def phoneme2sequence(phoneme):
@@ -63,7 +79,7 @@ def plot_fastspeech2_melspecs(melspecs, y_melspecs, epoch, exp_path, train=True)
         )
     
     plt.tight_layout()
-    save_path = os.path.join(exp_path, f"epoch_{epoch}.png" if train else f"valid_epoch_{epoch}.png")
+    save_path = os.path.join(exp_path, 'mels', f"epoch_{epoch}.png" if train else f"valid_epoch_{epoch}.png")
     plt.savefig(save_path, bbox_inches='tight', dpi=300)
     plt.close(fig)
 
@@ -75,23 +91,26 @@ def increment_path(base_path):
         path = os.path.join(base_path, f'exp_{exp_num}')
         if not os.path.exists(path):
             os.makedirs(path)
+            os.makedirs(os.path.join(path, 'wavs'))
+            os.makedirs(os.path.join(path, 'mels'))
             return path
         exp_num += 1
 
 
-def synthesize_sample(vocoder, melspecs, y_melspecs, exp_path, epoch):
-    melspecs = melspecs[:8, :, :]
-    y_melspecs = y_melspecs[:8, :, :]
+def synthesize_sample(vocoder, melspecs, y_melspecs, mel_length, exp_path, epoch):
+    melspecs = melspecs[:4, :, :]   # B, T, 80
+    y_melspecs = y_melspecs[:4, :, :]
+    mel_length = mel_length[:4]
 
-    for i, (mel, y_mel) in enumerate(zip(melspecs, y_melspecs)):
-        mel = mel.unsqueeze(0)
-        y_mel = y_mel.unsqueeze(0)
+    for i, (mel, y_mel, mel_T) in enumerate(zip(melspecs, y_melspecs, mel_length)):
+        mel = mel.unsqueeze(0).permute(0, 2, 1)[:, :, :mel_T]
+        y_mel = y_mel.unsqueeze(0).permute(0, 2, 1)[:, :, :mel_T]
 
         wav = vocoder.decode_batch(mel)
         y_wav = vocoder.decode_batch(y_mel)
 
-        wav_path = os.path.join(exp_path, f'epoch_{epoch}_sample_{i + 1}_pred.wav')
-        y_wav_path = os.path.join(exp_path, f'epoch_{epoch}_sample_{i + 1}_gt.wav')
+        wav_path = os.path.join(exp_path, 'wavs', f'epoch_{epoch}_sample_{i + 1}_pred.wav')
+        y_wav_path = os.path.join(exp_path, 'wavs', f'epoch_{epoch}_sample_{i + 1}_gt.wav')
 
-        speechbrain.utils.dataio.write_audio(wav_path, wav.squeeze(0), 22050)
-        speechbrain.utils.dataio.write_audio(y_wav_path, y_wav.squeeze(0), 22050)
+        torchaudio.save(wav_path, wav.squeeze(1), 16000)
+        torchaudio.save(y_wav_path, y_wav.squeeze(1), 16000)

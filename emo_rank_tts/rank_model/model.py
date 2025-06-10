@@ -72,21 +72,24 @@ class IntensityExtractor(nn.Module):
 
         # FFT blocks
         encoder_layer = ConvTransformerEncoderLayer(n_heads, hidden_dim, kernel_size, dropout)
-        self.fft_block = nn.TransformerEncoder(encoder_layer, n_encoder_layers)
+        self.fft_block = nn.TransformerEncoder(encoder_layer, n_encoder_layers, enable_nested_tensor=False)
 
         # emotion embedding
         self.emotion_embedding = nn.Embedding(n_emotions, hidden_dim)
 
+        # output linear
+        self.classifier = nn.Linear(hidden_dim, n_emotions)
+
 
     def forward(self, x, emotions, mask=None):
-
-        B, T, C = x.size()
 
         H = self.input_proj(x)  # (B, T, H)
         H = self.fft_block(H, src_key_padding_mask=mask)  # (B, T, H)
 
         emotion_emb = self.emotion_embedding(emotions).unsqueeze(1)
         I = H + emotion_emb  # (B, T, H)
+
+        I = self.classifier(I)  # (B, T, n_emotions)
         
         return I
 
@@ -94,33 +97,29 @@ class IntensityExtractor(nn.Module):
 ########################################################################
 # Fine-Grained Model
 ########################################################################
-class FineGraindModel(torch.nn.Module):
+class RankModel(torch.nn.Module):
 
     def __init__(
             self, 
             n_mels, 
-            n_heads, 
-            n_speakers, 
+            n_heads,
             n_emotions,
             n_encoder_layers,
             hidden_dim,
             kernel_size,
             dropout,
-
+            **kwargs,
         ):
-        super(FineGraindModel, self).__init__()
-        self.n_speakers = n_speakers
+        super(RankModel, self).__init__()
         self.n_emotions = n_emotions
         
         # intensity extractor
         self.intensity_extractor = IntensityExtractor(n_mels, n_heads, n_emotions, n_encoder_layers, hidden_dim, kernel_size, dropout)
 
-        # mixup classification head
-        self.classifier = nn.Linear(hidden_dim, n_emotions)
-
         # ranking score projector
-        self.projector = nn.Linear(hidden_dim, 1)
-    
+        self.projector = nn.Linear(n_emotions, 1, bias=False)
+
+
 
     def forward(self, emo_X, neu_X, emotions, length, lambdas=None):
 
@@ -149,20 +148,24 @@ class FineGraindModel(torch.nn.Module):
         Xj_mix = lam_j * emo_X + (1 - lam_j) * neu_X
 
         # extract intensity features
-        Ii = self.intensity_extractor(Xi_mix, emotions, mask=mask)  # (B, T, H)
-        Ij = self.intensity_extractor(Xj_mix, emotions, mask=mask)  # (B, T, H)
+        Ii = self.intensity_extractor(Xi_mix, emotions, mask=mask)  # (B, T, n_emotions)
+        Ij = self.intensity_extractor(Xj_mix, emotions, mask=mask)
 
         # masked time-average pooling
-        valid = (~mask).unsqueeze(-1).float()  # (B, T, 1)
-        hi = (Ii * valid).sum(dim=1) / length.unsqueeze(1).float()  # (B, H)
-        hj = (Ij * valid).sum(dim=1) / length.unsqueeze(1).float()
+        Ii = Ii.masked_fill(mask.unsqueeze(-1), 0.0)  # (B, T, n_emotions)
+        Ij = Ij.masked_fill(mask.unsqueeze(-1), 0.0) 
 
-        hi_ce = self.classifier(hi)  # (B, n_emotions)
-        hj_ce = self.classifier(hj)  # (B, n_emotions)
+        neutral_mask = emotions == 0
+        Ii = Ii.masked_fill(neutral_mask.unsqueeze(1).unsqueeze(2), 0.0)
+        Ij = Ij.masked_fill(neutral_mask.unsqueeze(1).unsqueeze(2), 0.0)
+
+        hi = Ii.sum(dim=1) / length.unsqueeze(1).float()  # (B, n_emotions)
+        hj = Ij.sum(dim=1) / length.unsqueeze(1).float()
 
         ri = self.projector(hi).squeeze(-1)  # (B,)
         rj = self.projector(hj).squeeze(-1)  # (B,)
 
-        return lam_i, lam_j, hi, hj, hi_ce, hj_ce, ri, rj
+        return lam_i, lam_j, Ii, Ij, hi, hj, ri, rj
+
 
 

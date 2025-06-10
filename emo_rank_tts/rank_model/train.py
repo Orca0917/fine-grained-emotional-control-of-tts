@@ -26,7 +26,6 @@ def train_one_epoch(dataloader, model, criterion, epoch, optim, writer, device):
 
         emo_X = batch['emo_X'].to(device)
         neu_X = batch['neu_X'].to(device)
-        speakers = batch['speakers'].to(device)
         emotions = batch['emotions'].to(device)
         length = batch['length'].to(device)
         targets = (emotions, torch.full_like(emotions, 0, device=device))
@@ -102,7 +101,7 @@ def validate_one_epoch(dataloader, model, criterion, epoch, writer, device,
         mixup_losses.append(mixup_loss)
         rank_losses.append(rank_loss)
 
-        h_list.append(predictions[2].detach().cpu().numpy())
+        h_list.append(predictions[4].detach().cpu().numpy())
         label_list.append(emotion.detach().cpu().numpy())
         speaker_list.append(speaker.detach().cpu().numpy())
         lam_list.append(lambdas[0, :].detach().cpu().numpy())
@@ -133,8 +132,8 @@ def validate_one_epoch(dataloader, model, criterion, epoch, writer, device,
     lambdas = np.concatenate(lam_list)
     alphas = np.minimum(1.0, lambdas + 0.1)
 
-    pca = sklearn.decomposition.PCA(n_components=50).fit_transform(h_array)
-    tsne = sklearn.manifold.TSNE(n_components=2, init='pca').fit_transform(pca)
+    # pca = sklearn.decomposition.PCA(n_components=50).fit_transform(h_array)
+    tsne = sklearn.manifold.TSNE(n_components=2).fit_transform(h_array)
 
     fig, ax = plt.subplots(figsize=(10, 10))
     for cls in range(n_emotions):
@@ -195,7 +194,6 @@ def train(config):
     max_iterations      = config['train']['max_iterations']
     colors              = config['misc']['colors']
     markers             = config['misc']['markers']
-    n_speakers          = len(speakers)
     n_emotions          = len(emotions)
 
     set_seed(42)
@@ -223,8 +221,7 @@ def train(config):
 
 
     # -- model
-    model = FineGraindModel(n_mels, n_heads, n_speakers, n_emotions,
-                      n_encoder_layers, hidden_dim, kernel_size, dropout)
+    model = FineGraindModel(n_mels, n_heads, n_emotions, n_encoder_layers, hidden_dim, kernel_size, dropout)
     model = model.to(device)
 
 

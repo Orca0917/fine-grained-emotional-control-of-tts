@@ -212,12 +212,12 @@ def prepare_data_lists(
 
                 # train
                 for emo_audio_id in emo_ids[:-5]:
-                    for neu_audio_id in random.sample(neu_ids, k=5):
+                    for neu_audio_id in random.sample(neu_ids, k=10):
                         train_list.append('|'.join([speaker, emotion, emo_audio_id, neu_audio_id]))
 
                 # test
                 for emo_audio_id in emo_ids[-5:]:
-                    for neu_audio_id in random.sample(neu_ids, k=5):
+                    for neu_audio_id in random.sample(neu_ids, k=10):
                         test_list.append('|'.join([speaker, emotion, emo_audio_id, neu_audio_id]))
 
 

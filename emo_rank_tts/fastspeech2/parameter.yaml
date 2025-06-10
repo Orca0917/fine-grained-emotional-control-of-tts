@@ -7,7 +7,9 @@ path:
   textgrid_path:      '/workspace/montreal_forced_aligner/aligned'
   preprocessed_path:  '/workspace/preprocessed'
   experiment_path:    '/workspace/experiments/fastspeech2'
+  model_path:         '/workspace/experiments/fastspeech2/exp_4/best_model.pth'
   vocoder_path:       '/workspace/pretrained_models/tts-hifigan-libritts-16kHz'
+  intensity_path:     '/workspace/experiments/rank_model/exp_5/intensity.npy'
 
 
 ##############################################
@@ -27,7 +29,7 @@ preprocessing:
 # 3. Audio (optimized for vocoder)
 ##############################################
 audio:
-  sampling_rate:      24000
+  sampling_rate:      16000
   hop_length:         256
   win_length:         1024
   n_fft:              1024
@@ -44,6 +46,7 @@ train:
   max_iterations:     250000
   batch_size:         8
   learning_rate:      0.0001
+  patience:           10
 
 
 ##############################################
@@ -118,5 +121,10 @@ misc:
 ##############################################
 inference:
   mode:               'bucketize'     # 'bucketize' or 'inference'
-  best_pth_path:      '/workspace/experiments/rank_model/exp_1/best_model.pth'
+  best_pth_path:      '/workspace/experiments/rank_model/exp_5/best_model.pth'
   bucket_size:        3
+
+  speaker:            'jenie'
+  emotion:            'neutral'
+  text:               'Hello, my name is ryu jong moon'
+  intensity_level:    2
