@@ -2,13 +2,18 @@
 
 <h1> Fine-grained emotional control of Text-to-Speech </h2>
 <h3> LEARNING TO RANK INTER- AND INTRA-CLASS EMOTION INTENSITIES </h3>
-
+<h4><i> Shijun Wang, Jón Guðnason, Damian Borth </i></h4>
+<h4> ICASSP 2023 </h4>
 </div>
 
 <br>
 
 
 Fine-grained emotional control for Text-to-Speech enables generation of speech with varying emotional intensities. This repository implements a ranking model that learns inter- and intra-class emotion strength and a FastSpeech2 based TTS system conditioned on those intensities. Preprocessing converts raw audio to features, aligns transcripts using Montreal Forced Aligner (MFA) and splits data for training. The EmoV-DB dataset is used, containing multiple speakers with several emotions each. Example scripts are provided for preparing data, training models and performing inference.
+
+<br>
+
+⚠️ This is unofficial implementation of the paper. Please refer the original paper.
 
 <br>
 
