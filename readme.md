@@ -8,47 +8,70 @@
 <br>
 
 
+Fine-grained emotional control for Text-to-Speech enables generation of speech with varying emotional intensities. This repository implements a ranking model that learns inter- and intra-class emotion strength and a FastSpeech2 based TTS system conditioned on those intensities. Preprocessing converts raw audio to features, aligns transcripts using Montreal Forced Aligner (MFA) and splits data for training. The EmoV-DB dataset is used, containing multiple speakers with several emotions each. Example scripts are provided for preparing data, training models and performing inference.
 
+<br>
 
-# Rank Model
+## Environment
+- Docker image: `pytorch/pytorch:2.2.0-cuda11.8-cudnn8-devel`
+- GPU: NVIDIA RTX 4060 (8GB VRAM)
 
+<br>
+
+## Setup
+1. Clone this repository and install Python requirements:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Download the [EmoV-DB dataset](https://www.openslr.org/115/) and place it under `/workspace/data/EmoV-DB` (path can be changed in `parameter.yaml`).
+3. Download the pretrained HiFi-GAN vocoder for LibriTTS (16kHz) to `/workspace/pretrained_models/tts-hifigan-libritts-16kHz`.
+
+<br>
+
+## Preprocessing
+1. **Prepare MFA corpus**
+   ```bash
+   python rank_model/prepare_mfa.py
+   ```
+2. **Install Montreal Forced Aligner**
+   ```bash
+   conda create -n aligner -c conda-forge montreal-forced-aligner -y
+   conda activate aligner
+   mfa model download acoustic english_us_arpa
+   wget -O /workspace/montreal_forced_aligner/librispeech-lexicon.txt \
+         https://openslr.org/resources/11/librispeech-lexicon.txt
+   mfa validate /workspace/montreal_forced_aligner/corpus \
+              /workspace/montreal_forced_aligner/librispeech-lexicon.txt english_us_arpa
+   mfa align /workspace/montreal_forced_aligner/corpus \
+            /workspace/montreal_forced_aligner/librispeech-lexicon.txt english_us_arpa \
+            /workspace/montreal_forced_aligner/aligned
+   ```
+   After alignment, return to the base environment:
+   ```bash
+   conda activate base
+   ```
+3. **Feature extraction**
+   ```bash
+   python rank_model/preprocess.py
+   ```
+4. **Prepare FastSpeech2 dataset splits**
+   ```bash
+   python fastspeech2/preprocess.py
+   ```
+<br>
+
+## Training
+Train the rank model and FastSpeech2 model sequentially:
+```bash
+PYTHONENV=. python rank_model/train.py
+PYTHONENV=. python fastspeech2/train.py
 ```
-python prepare_mfa.py
-```
 
-```
-# download speech dictionary
-wget -O /workspace/montreal_forced_aligner/librispeech-lexicon.txt https://openslr.trmal.net/resources/11/librispeech-lexicon.txt 
+<br>
 
-# prepare environment for montreal forced aligner
-conda create -n aligner -c conda-forge montreal-forced-aligner -y
-conda activate aligner
-
-# **important** please make sure to select `aligner` environment
-mfa model download acoustic english_us_arpa
-mfa validate /workspace/montreal_forced_aligner/corpus /workspace/montreal_forced_aligner/librispeech-lexicon.txt english_us_arpa
-mfa align /workspace/montreal_forced_aligner/corpus /workspace/montreal_forced_aligner/librispeech-lexicon.txt english_us_arpa /workspace/montreal_forced_aligner/aligned
-```
-
-```
-conda activate base
-python preprocess.py
-```
-
-```
-python train.py
-```
-
-```
-python inference.py
-```
-
-# Fastspeech2
-
-```
-python preprocess.py
-
-python train.py
-
-python inference.py
+## Inference
+Generate speech using the trained models:
+```bash
+PYTHONENV=. python rank_model/inference.py
+PYTHONENV=. python fastspeech2/inference.py
 ```
