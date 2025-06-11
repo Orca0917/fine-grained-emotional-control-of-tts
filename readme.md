@@ -80,3 +80,21 @@ Generate speech using the trained models:
 PYTHONENV=. python rank_model/inference.py
 PYTHONENV=. python fastspeech2/inference.py
 ```
+
+<br>
+
+## Results
+
+1. T-SNE visualization of intensity representation
+
+![intensity representation](/assets/intensities.png)
+
+2. Predicted mel-spectrograms of fastspeech2 (20epoch, batch size 8)
+
+![melspectrogram](/assets/melspectrograms.png)
+
+<br>
+
+## Reference
+
+Wang, S., Guðnason, J., & Borth, D. (2023, June). Fine-grained emotional control of text-to-speech: Learning to rank inter-and intra-class emotion intensities. In ICASSP 2023-2023 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) (pp. 1-5). IEEE.
