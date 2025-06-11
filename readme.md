@@ -1,19 +1,28 @@
 <div align="center">
 
-<h1> Fine-grained emotional control of Text-to-Speech </h2>
-<h3> LEARNING TO RANK INTER- AND INTRA-CLASS EMOTION INTENSITIES </h3>
-<h4><i> Shijun Wang, Jón Guðnason, Damian Borth </i></h4>
-<h4> ICASSP 2023 </h4>
+<h1>Fine-grained Emotional Control of Text-to-Speech</h1>
+<h3>Learning to Rank Inter- and Intra-Class Emotion Intensities</h3>
+<h4><i>Shijun Wang, Jón Guðnason, Damian Borth</i></h4>
+<h4>ICASSP 2023</h4>
+
 </div>
 
 <br>
-
 
 Fine-grained emotional control for Text-to-Speech enables generation of speech with varying emotional intensities. This repository implements a ranking model that learns inter- and intra-class emotion strength and a FastSpeech2 based TTS system conditioned on those intensities. Preprocessing converts raw audio to features, aligns transcripts using Montreal Forced Aligner (MFA) and splits data for training. The EmoV-DB dataset is used, containing multiple speakers with several emotions each. Example scripts are provided for preparing data, training models and performing inference.
 
 <br>
 
-⚠️ This is unofficial implementation of the paper. Please refer the original paper.
+---
+
+<div align="center">
+
+⚠️ This is an **unofficial implementation** of the paper.  
+For the original work, please refer to the [ICASSP 2023 paper](https://ieeexplore.ieee.org/document/10097118).
+
+</div>
+
+---
 
 <br>
 
@@ -39,22 +48,29 @@ Fine-grained emotional control for Text-to-Speech enables generation of speech w
    python rank_model/prepare_mfa.py
    ```
 2. **Install Montreal Forced Aligner**
-   ```bash
-   conda create -n aligner -c conda-forge montreal-forced-aligner -y
-   conda activate aligner
-   mfa model download acoustic english_us_arpa
-   wget -O /workspace/montreal_forced_aligner/librispeech-lexicon.txt \
-         https://openslr.org/resources/11/librispeech-lexicon.txt
-   mfa validate /workspace/montreal_forced_aligner/corpus \
-              /workspace/montreal_forced_aligner/librispeech-lexicon.txt english_us_arpa
-   mfa align /workspace/montreal_forced_aligner/corpus \
+
+    ```
+   # Create and activate environment
+    conda create -n aligner -c conda-forge montreal-forced-aligner -y
+    conda activate aligner
+
+    # Download models and dictionary
+    mfa model download acoustic english_us_arpa
+    wget -O /workspace/montreal_forced_aligner/librispeech-lexicon.txt \
+        https://openslr.org/resources/11/librispeech-lexicon.txt
+
+    # Validate and align
+    mfa validate /workspace/montreal_forced_aligner/corpus \
+                /workspace/montreal_forced_aligner/librispeech-lexicon.txt english_us_arpa
+
+    mfa align /workspace/montreal_forced_aligner/corpus \
             /workspace/montreal_forced_aligner/librispeech-lexicon.txt english_us_arpa \
             /workspace/montreal_forced_aligner/aligned
-   ```
-   After alignment, return to the base environment:
-   ```bash
-   conda activate base
-   ```
+
+    # Return to base environment
+    conda activate base
+    ```
+
 3. **Feature extraction**
    ```bash
    python rank_model/preprocess.py
@@ -85,16 +101,39 @@ PYTHONENV=. python fastspeech2/inference.py
 
 ## Results
 
-1. T-SNE visualization of intensity representation
+### 1. T-SNE Visualization of Intensity Representation
 
-![intensity representation](/assets/intensities.png)
+This plot visualizes the learned intensity representations extracted by the RankModel using T-SNE.
+Each point corresponds to a sentence-level representation, color-coded by emotion labels (e.g., Angry, Neutral, Amused, etc.).
 
-2. Predicted mel-spectrograms of fastspeech2 (20epoch, batch size 8)
+<div align="center">
+<img src="assets/intensities.png" width="60%" />
+</div>
+
+From the plot, we observe that emotional utterances are well-separated in the latent space, indicating that the intensity extractor effectively captures emotion-specific characteristics. Notably, *neutral* and *sleepiness* samples form distinct clusters, supporting the model’s ability to generalize emotion intensity.
+
+
+### 2. Predicted Mel-Spectrograms of FastSpeech2 (Epoch 20, Batch Size 8)
+
+Below is a comparison between predicted and ground-truth mel-spectrograms for randomly sampled utterances at epoch 20.
 
 ![melspectrogram](/assets/melspectrograms.png)
+
+- Top 8: **Predicted Mel-Spectrograms**  
+- Bottom 8: **Ground Truth Mel-Spectrograms**
+
+We observe that the model captures the overall prosody and spectral shape well. However, subtle mismatches in pitch contour and energy levels still exist, especially in high-emotion utterances. Improvements are expected with additional fine-tuning or by incorporating emotion intensity explicitly.
+
 
 <br>
 
 ## Reference
 
 Wang, S., Guðnason, J., & Borth, D. (2023, June). Fine-grained emotional control of text-to-speech: Learning to rank inter-and intra-class emotion intensities. In ICASSP 2023-2023 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) (pp. 1-5). IEEE.
+
+<br>
+
+## Acknowledgements
+
+- [Montreal Forced Aligner (MFA)](https://montreal-forced-aligner.readthedocs.io/)
+- [HiFi-GAN Vocoder](https://github.com/jik876/hifi-gan)
