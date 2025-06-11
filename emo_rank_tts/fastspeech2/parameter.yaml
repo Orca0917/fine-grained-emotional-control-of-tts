@@ -6,10 +6,8 @@ path:
   corpus_path:        '/workspace/montreal_forced_aligner/corpus'
   textgrid_path:      '/workspace/montreal_forced_aligner/aligned'
   preprocessed_path:  '/workspace/preprocessed'
-  experiment_path:    '/workspace/experiments/fastspeech2'
-  model_path:         '/workspace/experiments/fastspeech2/exp_4/best_model.pth'
+  experiment_path:    '/workspace/experiments'
   vocoder_path:       '/workspace/pretrained_models/tts-hifigan-libritts-16kHz'
-  intensity_path:     '/workspace/experiments/rank_model/exp_5/intensity.npy'
 
 
 ##############################################
@@ -46,7 +44,7 @@ train:
   max_iterations:     250000
   batch_size:         8
   learning_rate:      0.0001
-  patience:           10
+  patience:           5
 
 
 ##############################################
@@ -54,9 +52,9 @@ train:
 ##############################################
 model:
   rank_model:
-    n_encoder_layers:   4
+    n_encoder_layers:   6
     n_heads:            2
-    hidden_dim:         256
+    hidden_dim:         384
     kernel_size:        9
     dropout:            0.1
     alpha:              0.1
@@ -121,10 +119,7 @@ misc:
 ##############################################
 inference:
   mode:               'bucketize'     # 'bucketize' or 'inference'
-  best_pth_path:      '/workspace/experiments/rank_model/exp_5/best_model.pth'
+  rank_model:         'exp_6'
+  fastspeech2:        'exp_5'
   bucket_size:        3
-
-  speaker:            'jenie'
-  emotion:            'neutral'
-  text:               'Hello, my name is ryu jong moon'
-  intensity_level:    2
+  text:               'gregson was asleep when he re-entered the cabin.'

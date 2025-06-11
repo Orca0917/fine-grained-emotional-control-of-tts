@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from speechbrain.utils.text_to_sequence import _clean_text
 from speechbrain.inference.text import GraphemeToPhoneme
+# from g2p_en import G2p
 
 
 SIL_PHONES = ['sil', 'spn', 'sp', '']
@@ -17,7 +18,9 @@ def text2sequence(text):
 
 
 def text2phoneme(text):
-    g2p = GraphemeToPhoneme.from_hparams("speechbrain/soundchoice-g2p")
+    g2p = GraphemeToPhoneme.from_hparams('speechbrain/soundchoice-g2p', 
+                                         savedir='/workspace/pretrained_models/soundchoice-gwp',
+                                         run_opts={'device':'cuda:0'})
     text = _clean_text(text, ['english_cleaners'])
     phoneme = g2p(text)
     phoneme = [token for token in phoneme if token in VALID_TOKENS]

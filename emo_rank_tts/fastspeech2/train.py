@@ -6,13 +6,14 @@ from collections import defaultdict
 from torch.utils.tensorboard import SummaryWriter
 from speechbrain.inference.vocoders import HIFIGAN
 
-from loss import Loss
-from model import FastSpeech2, RankModel
-from dataset import FastSpeech2Dataset, TextMelCollateWithAlignment
-from util import batch_to_device, plot_fastspeech2_melspecs, increment_path, synthesize_sample
+from rank_model.model import RankModel
+from fastspeech2.loss import Loss
+from fastspeech2.model import FastSpeech2
+from fastspeech2.dataset import FastSpeech2Dataset, TextMelCollateWithAlignment
+from fastspeech2.util import batch_to_device, plot_fastspeech2_melspecs, increment_path, synthesize_sample
 
 
-def get_intensity_representation(rank_model, batch, device):
+def get_intensity_representation(intensity_extractor, batch, device):
 
     (
         phoneme, _, phon_len, _, _, _,
@@ -22,13 +23,15 @@ def get_intensity_representation(rank_model, batch, device):
     with torch.no_grad():
         B = rank_X.size(0)
         lambdas = torch.ones((2, B), device=device)
-        I = rank_model(rank_X, rank_X, emo_ids, mel_len, lambdas)[2]
+
+        I = intensity_extractor(rank_X, mel_len, emo_ids)
 
         B, T_phon_max = phoneme.shape
         _, _, D = I.shape
         intensity_rep = torch.zeros((B, T_phon_max, D), device=device)
 
         for b in range(B):
+
             T_phon = phon_len[b].item()
             durations = duration_tgt[b].long()[:T_phon]
             T_mel = int(durations.sum().item())
@@ -48,7 +51,7 @@ def get_intensity_representation(rank_model, batch, device):
     return intensity_rep
 
 
-def train_one_epoch(dataloader, model, rank_model, criterion, optim, device, epoch, exp_path, writer):
+def train_one_epoch(dataloader, model, intensity_extractor, criterion, optim, device, epoch, exp_path, writer):
     model.train()
     
     pbar = tqdm(dataloader, desc=f'Train Epoch {epoch + 1}', unit='batch', dynamic_ncols=True)
@@ -63,7 +66,7 @@ def train_one_epoch(dataloader, model, rank_model, criterion, optim, device, epo
         ) = batch
 
         # intensity extraction
-        intensity_rep = get_intensity_representation(rank_model, batch, device)
+        intensity_rep = get_intensity_representation(intensity_extractor, batch, device)
         
         # forward pass
         predictions = model(phoneme, spk_ids, duration_tgt, pitch_tgt, energy_tgt, intensity=intensity_rep)
@@ -117,7 +120,7 @@ def valid_one_epoch(dataloader, model, rank_model, vocoder, criterion, device, e
 
             batch = batch_to_device(batch, device)
             (
-                phoneme, speakers, phon_len, mel_tgt, pitch_tgt, energy_tgt,
+                phoneme, spk_ids, phon_len, mel_tgt, pitch_tgt, energy_tgt,
                 duration_tgt, mel_len, _, _, _, _
             ) = batch
 
@@ -125,7 +128,7 @@ def valid_one_epoch(dataloader, model, rank_model, vocoder, criterion, device, e
             intensity_rep = get_intensity_representation(rank_model, batch, device)
 
             # forward pass
-            predictions = model(phoneme, speakers, duration_tgt, pitch_tgt, energy_tgt, intensity=intensity_rep)
+            predictions = model(phoneme, spk_ids, duration_tgt, pitch_tgt, energy_tgt, intensity=intensity_rep)
 
             # compute loss
             targets = (mel_tgt, duration_tgt, pitch_tgt, energy_tgt, mel_len, phon_len)
@@ -166,23 +169,30 @@ def train(config):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    # Paths and configurations
     preprocessed_path       = config['path']['preprocessed_path']
-    experiment_path         = config['path']['experiment_path']
+    exp_base_path           = config['path']['experiment_path']
     vocoder_path            = config['path']['vocoder_path']
     noise_symbol            = config['preprocessing']['noise_symbol']
     speaker_list            = config['preprocessing']['speakers']
     emotion_list            = config['preprocessing']['emotions']
+
+    # Hyperparameters
     lr                      = config['train']['learning_rate']
     batch_size              = config['train']['batch_size']
     n_epochs                = config['train']['n_epochs']
     max_iterations          = config['train']['max_iterations']
+    max_patience            = config['train']['patience']
     fastspeech2_config      = config['model']['fastspeech2']
     rank_model_config       = config['model']['rank_model']
     n_mels                  = config['audio']['n_mels']
-    rank_model_path_path    = config['inference']['best_pth_path']
+    rank_model_exp_name     = config['inference']['rank_model']
     loss_config             = config['loss']
+
+
     n_speakers              = len(speaker_list)
     n_emotions              = len(emotion_list)
+    rank_model_pth_path     = os.path.join('/workspace/experiments/rank_model', rank_model_exp_name, 'best_model.pth')
 
 
     # Load dataset
@@ -206,11 +216,10 @@ def train(config):
 
     # model2: intensity extractor
     rank_model = RankModel(**rank_model_config, n_emotions=n_emotions, n_mels=n_mels)
-    rank_model.load_state_dict(torch.load(rank_model_path_path), map_location=device)
-    rank_model.to(device)
-    rank_model.eval()
-    for param in rank_model.parameters():
-        param.requires_grad = False
+    rank_model.load_state_dict(torch.load(rank_model_pth_path, map_location=device))
+    intensity_extractor = rank_model.intensity_extractor
+    intensity_extractor.to(device).eval().requires_grad_(False)
+
 
     # model3: hifigan vocoder
     vocoder = HIFIGAN.from_hparams(source="speechbrain/tts-hifigan-libritts-16kHz", savedir=vocoder_path)
@@ -220,10 +229,11 @@ def train(config):
     criterion.to(device)
 
     # optimizer
-    optimizer = torch.optim.Adam(fastspeech2.parameters(), lr=lr)
+    optimizer = torch.optim.AdamW(fastspeech2.parameters(), lr=lr)
 
     # -- tensorboard
-    exp_path = increment_path(experiment_path)
+    exp_path = os.path.join(exp_base_path, 'fastspeech2')
+    exp_path = increment_path(exp_path)
     writer = SummaryWriter(exp_path)
 
     # -- stats
@@ -233,27 +243,25 @@ def train(config):
     
     for epoch in range(n_epochs):
         
-        train_one_epoch(train_dataloader, fastspeech2, rank_model, criterion, optimizer, device, epoch, exp_path, writer)
-        val_loss = valid_one_epoch(valid_dataloader, fastspeech2, rank_model, vocoder, criterion, device, epoch, exp_path, writer)
+        train_one_epoch(train_dataloader, fastspeech2, intensity_extractor, criterion, optimizer, device, epoch, exp_path, writer)
+        val_loss = valid_one_epoch(valid_dataloader, fastspeech2, intensity_extractor, vocoder, criterion, device, epoch, exp_path, writer)
 
         if val_loss < best_valid_loss:
+            patience = 0
             best_valid_loss = val_loss
             print(f'New best validation loss: {best_valid_loss:.4f}')
             torch.save(fastspeech2.state_dict(), os.path.join(exp_path, 'best_model.pth'))
+        else:
+            patience += 1
+            print(f'Validation loss did not improve: {patience}/{max_patience}')
+            if patience >= max_patience:
+                print(f"Early stopping triggered after {patience} epochs without improvement.")
+                break
 
         global_step += len(train_dataloader)
         if global_step >= max_iterations:
             print(f"Reached max iterations: {max_iterations}. Stopping training.")
             break
-
-        # Early stopping
-        if val_loss < best_valid_loss:
-            patience = 0
-        else:
-            patience += 1
-            if patience >= config['train']['patience']:
-                print(f"Early stopping triggered after {patience} epochs without improvement.")
-                break
 
     writer.close()
     print("Training completed.")

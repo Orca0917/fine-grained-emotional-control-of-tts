@@ -3,10 +3,10 @@
 ##############################################
 path:
   data_path:          '/workspace/data/EmoV-DB'
+  preprocessed_path:  '/workspace/preprocessed'
+  experiment_path:    '/workspace/experiments'
   corpus_path:        '/workspace/montreal_forced_aligner/corpus'
   textgrid_path:      '/workspace/montreal_forced_aligner/aligned'
-  preprocessed_path:  '/workspace/preprocessed'
-  experiment_path:    '/workspace/experiments/rank_model'
 
 
 ##############################################
@@ -39,10 +39,11 @@ audio:
 # 4. Training
 ##############################################
 train:
-  n_epohcs:           100
-  max_iterations:     200000
-  batch_size:         32
+  n_epohcs:           10
+  max_iterations:     20000
+  batch_size:         16
   learning_rate:      0.000001
+  patience:           5
 
 
 ##############################################
@@ -71,5 +72,5 @@ misc:
 ##############################################
 inference:
   mode:               'bucketize'     # 'bucketize' or 'inference'
-  best_pth_path:      '/workspace/experiments/rank_model/exp_5/best_model.pth'
+  exp_name:           'exp_6'
   bucket_size:        3

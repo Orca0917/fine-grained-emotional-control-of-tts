@@ -103,8 +103,8 @@ def collate_fn(batch):
         length[idx] = T
 
     # convert to tensors
-    emo_X = torch.FloatTensor(emo_X)
-    neu_X = torch.FloatTensor(neu_X)
+    emo_X = torch.FloatTensor(emo_X).permute(0, 2, 1)  # (B, T, n_mels + 2)
+    neu_X = torch.FloatTensor(neu_X).permute(0, 2, 1)  # (B, T, n_mels + 2)
 
     return {
         'emo_X': emo_X,

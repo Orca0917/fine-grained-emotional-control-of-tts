@@ -80,8 +80,22 @@ class IntensityExtractor(nn.Module):
         # output linear
         self.classifier = nn.Linear(hidden_dim, n_emotions)
 
+    
+    def prepare_mask(self, x, length):
 
-    def forward(self, x, emotions, mask=None):
+        B, T, C = x.size()
+        device = x.device
+
+        # create a mask for the transformer
+        mask = torch.arange(T, device=device).unsqueeze(0).expand(B, T) \
+            >= length.unsqueeze(1)  # (B, T)
+        
+        return mask
+
+
+    def forward(self, x, length, emotions):
+
+        mask = self.prepare_mask(x, length)
 
         H = self.input_proj(x)  # (B, T, H)
         H = self.fft_block(H, src_key_padding_mask=mask)  # (B, T, H)
@@ -89,6 +103,7 @@ class IntensityExtractor(nn.Module):
         emotion_emb = self.emotion_embedding(emotions).unsqueeze(1)
         I = H + emotion_emb  # (B, T, H)
 
+        I = I.masked_fill(mask.unsqueeze(-1), 0.0)  # (B, T, H)
         I = self.classifier(I)  # (B, T, n_emotions)
         
         return I
@@ -120,45 +135,28 @@ class RankModel(torch.nn.Module):
         self.projector = nn.Linear(n_emotions, 1, bias=False)
 
 
-
     def forward(self, emo_X, neu_X, emotions, length, lambdas=None):
 
-        B, C, T = emo_X.size()
+        B, T, C = emo_X.size()
         device = emo_X.device
-
-        # create a mask for the transformer
-        mask = torch.arange(T, device=device).unsqueeze(0).expand(B, T) \
-            >= length.unsqueeze(1)  # (B, T)
-
-        # permute to (B, C, T) -> (B, T, C)
-        emo_X = emo_X.permute(0, 2, 1)
-        neu_X = neu_X.permute(0, 2, 1)
 
         # sample mixup weights
         if lambdas is None:
             dist = torch.distributions.Beta(1.0, 1.0)
-            lam_i = dist.sample((B,)).to(device).unsqueeze(1).unsqueeze(1)  # (B, 1, 1)
-            lam_j = dist.sample((B,)).to(device).unsqueeze(1).unsqueeze(1)  # (B, 1, 1)
-        else:
-            lam_i = lambdas[0].to(device).unsqueeze(1).unsqueeze(1)
-            lam_j = lambdas[1].to(device).unsqueeze(1).unsqueeze(1)
+            lambdas = dist.sample((2, B)).to(device)  # (2, B)
+
+        lam_i = lambdas[0].unsqueeze(1).unsqueeze(1)  # (B, 1, 1)
+        lam_j = lambdas[1].unsqueeze(1).unsqueeze(1)
 
         # mixup at frame level
         Xi_mix = lam_i * emo_X + (1 - lam_i) * neu_X  # (B, T, C)
         Xj_mix = lam_j * emo_X + (1 - lam_j) * neu_X
 
         # extract intensity features
-        Ii = self.intensity_extractor(Xi_mix, emotions, mask=mask)  # (B, T, n_emotions)
-        Ij = self.intensity_extractor(Xj_mix, emotions, mask=mask)
+        Ii = self.intensity_extractor(Xi_mix, length, emotions)  # (B, T, n_emotions)
+        Ij = self.intensity_extractor(Xj_mix, length, emotions)
 
         # masked time-average pooling
-        Ii = Ii.masked_fill(mask.unsqueeze(-1), 0.0)  # (B, T, n_emotions)
-        Ij = Ij.masked_fill(mask.unsqueeze(-1), 0.0) 
-
-        neutral_mask = emotions == 0
-        Ii = Ii.masked_fill(neutral_mask.unsqueeze(1).unsqueeze(2), 0.0)
-        Ij = Ij.masked_fill(neutral_mask.unsqueeze(1).unsqueeze(2), 0.0)
-
         hi = Ii.sum(dim=1) / length.unsqueeze(1).float()  # (B, n_emotions)
         hj = Ij.sum(dim=1) / length.unsqueeze(1).float()
 

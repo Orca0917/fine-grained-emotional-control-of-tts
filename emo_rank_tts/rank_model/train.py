@@ -5,14 +5,15 @@ import sklearn
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-
 from tqdm import tqdm
-from loss import RankLoss
-from model import FineGraindModel
 from matplotlib.lines import Line2D
-from util import set_seed, increment_path
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from dataset import FineGrainedDataset, collate_fn
+
+from rank_model.loss import RankLoss
+from rank_model.model import RankModel
+from rank_model.util import set_seed, increment_path
+from rank_model.dataset import FineGrainedDataset, collate_fn
 
 
 def train_one_epoch(dataloader, model, criterion, epoch, optim, writer, device):
@@ -122,7 +123,6 @@ def validate_one_epoch(dataloader, model, criterion, epoch, writer, device,
     writer.add_scalar('valid/loss', avg_loss, epoch)
     writer.add_scalar('valid/mixup_loss', avg_mixup_loss, epoch)
     writer.add_scalar('valid/rank_loss', avg_rank_loss, epoch)
-
     
 
     # visualization
@@ -167,7 +167,7 @@ def validate_one_epoch(dataloader, model, criterion, epoch, writer, device,
     ax.grid(True, linestyle='--', alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(exp_path, f'tsne_epoch_{epoch + 1}.png'))
+    plt.savefig(os.path.join(exp_path, f'tsne_epoch_{epoch}.png'))
     plt.close()
 
     return avg_loss
@@ -178,7 +178,7 @@ def train(config):
 
     # -- parameters
     preprocessed_path   = config['path']['preprocessed_path']
-    experiment_path     = config['path']['experiment_path']
+    exp_base_path       = config['path']['experiment_path']
     speakers            = config['preprocessing']['speakers']
     emotions            = config['preprocessing']['emotions']
     n_mels              = config['audio']['n_mels']
@@ -192,6 +192,7 @@ def train(config):
     batch_size          = config['train']['batch_size']
     lr                  = config['train']['learning_rate']
     max_iterations      = config['train']['max_iterations']
+    max_patience        = config['train']['patience']
     colors              = config['misc']['colors']
     markers             = config['misc']['markers']
     n_emotions          = len(emotions)
@@ -204,24 +205,12 @@ def train(config):
 
 
     # -- dataloader
-    train_dataloader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        collate_fn=collate_fn,
-        num_workers=2,
-    )
-    valid_dataloader = torch.utils.data.DataLoader(
-        valid_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        collate_fn=collate_fn,
-        num_workers=2,
-    )
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn, num_workers=4)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn, num_workers=4)
 
 
     # -- model
-    model = FineGraindModel(n_mels, n_heads, n_emotions, n_encoder_layers, hidden_dim, kernel_size, dropout)
+    model = RankModel(n_mels, n_heads, n_emotions, n_encoder_layers, hidden_dim, kernel_size, dropout)
     model = model.to(device)
 
 
@@ -231,22 +220,23 @@ def train(config):
 
 
     # -- optimizer
-    optim = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-5)
+    optim = torch.optim.AdamW(model.parameters(), lr=lr)
 
 
     # -- tensorboard
-    exp_path = increment_path(experiment_path)
+    exp_path = os.path.join(exp_base_path, 'rank_model')
+    exp_path = increment_path(exp_path)
+    print("- Experiments will be saved to:", exp_path)
     writer = SummaryWriter(exp_path)
 
 
     # -- stats
     global_step = 0
+    patience = 0
     best_valid_loss = float('inf')
 
 
     # -- training loop
-    validate_one_epoch(valid_dataloader, model, criterion, 0, writer, 
-                       device, exp_path, emotions, speakers, colors, markers)
     for epoch in range(config['train']['n_epohcs']):
         train_one_epoch(train_dataloader, model, criterion, epoch, optim, writer, device)
         val_loss = validate_one_epoch(valid_dataloader, model, criterion, epoch, writer,
@@ -254,9 +244,16 @@ def train(config):
         
         # save best model
         if val_loss < best_valid_loss:
+            patience = 0
             best_valid_loss = val_loss
             print(f'New best validation loss: {best_valid_loss:.4f}')
             torch.save(model.state_dict(), os.path.join(exp_path, 'best_model.pth'))
+        else:
+            patience += 1
+            print(f'Validation loss did not improve: {val_loss:.4f}, patience: {patience}/{max_patience}')
+            if patience >= max_patience:
+                print(f"Early stopping triggered after {patience} epochs without improvement.")
+                break
         
         
         global_step += len(train_dataloader)
@@ -268,9 +265,9 @@ def train(config):
 if __name__ == '__main__':
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(f'Using device: {device}')
+    print(f'- Using device: {device}')
 
     # Load configuration
-    config = yaml.safe_load(open('parameter.yaml'))
+    config = yaml.safe_load(open('rank_model/parameter.yaml'))
 
     train(config)

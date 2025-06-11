@@ -1,9 +1,11 @@
+import os
 import yaml
 import torch
 import torchaudio
 import numpy as np
+from itertools import product
 from model import FastSpeech2
-from util import text2sequence, phoneme2sequence
+from util import text2sequence
 from speechbrain.inference.vocoders import HIFIGAN
 
 
@@ -19,9 +21,10 @@ def get_intensity_rep(speaker, emotion, intensity_lv, T_phon, intensity_path):
     return intensity
 
 
-def load_model(config, speaker_list, device):
-    model = FastSpeech2(**config['model']['fastspeech2'], n_speakers=len(speaker_list))
-    model.load_state_dict(torch.load(config['path']['model_path'], map_location=device))
+def load_model(fastspeech2_pth_path, model_config, speaker_list, device):
+
+    model = FastSpeech2(**model_config, n_speakers=len(speaker_list))
+    model.load_state_dict(torch.load(fastspeech2_pth_path, map_location=device))
     return model.to(device).eval()
 
 
@@ -39,29 +42,46 @@ def inference(config):
     speaker_list                = config['preprocessing']['speakers']
     emotion_list                = config['preprocessing']['emotions']
 
+    # process input
+    text                        = config['inference']['text']
+    bucket_size                 = config['inference']['bucket_size']
+    rank_model_exp_name         = config['inference']['rank_model']
+    fastspeech2_exp_name        = config['inference']['fastspeech2']
+    exp_base_path               = config['path']['experiment_path']
+    fastspeech2_config          = config['model']['fastspeech2']
+    
+    fastspeech2_pth_path        = os.path.join(exp_base_path, 'fastspeech2', fastspeech2_exp_name, 'best_model.pth')
+    intensity_path              = os.path.join(exp_base_path, 'rank_model', rank_model_exp_name, 'intensity.npy')
+    phoneme                     = text2sequence(text) 
+    T_phon                      = len(phoneme) 
+
     # load FastSpeech2 model
-    model = load_model(config, speaker_list, device)
+    model = load_model(fastspeech2_pth_path, fastspeech2_config, speaker_list, device)
     vocoder = HIFIGAN.from_hparams(
         source="speechbrain/tts-hifigan-libritts-16kHz", 
         savedir=config['path']['vocoder_path']
     )
 
-    # process input
-    text                        = config['inference']['text']
-    speaker                     = config['inference']['speaker']
-    emotion                     = config['inference']['emotion']
-    intensity_lv                = config['inference']['intensity_level']
-    
-    phon_ids, spkr_ids, spk_id, emo_id = preprocess_input(text, speaker, emotion, speaker_list, emotion_list, device)
-    T_phon = phon_ids.size(1)
-    intensity = get_intensity_rep(spk_id, emo_id, intensity_lv, T_phon, config['path']['intensity_path']).to(device)
-
     # -- inference
     model.eval()
+    preprocess_cache = {}
+    for spk , emo in product(speaker_list, emotion_list):
+        preprocess_cache[(spk, emo)] = preprocess_input(text, spk, emo, speaker_list, emotion_list, device)
+        
     with torch.no_grad():
-        melspecs = model(phon_ids, spkr_ids, intensity=intensity)[0].permute(0, 2, 1)
-        wav = vocoder.decode_batch(melspecs)
-        torchaudio.save('result.wav', wav.squeeze(1), 16000)
+        for (spk, emo), (phon_ids, spkr_ids, spk_id, emo_id) in preprocess_cache.items():
+
+            # prepare intensity representations
+            intensities = [
+                get_intensity_rep(spk_id, emo_id, lv, T_phon, intensity_path).to(device)
+                for lv in range(bucket_size)
+            ]
+
+            # model inference
+            for lv, intensity in enumerate(intensities):
+                melspecs = model(phon_ids, spkr_ids, intensity=intensity)[0].permute(0, 2, 1)
+                wav = vocoder.decode_batch(melspecs)
+                torchaudio.save(f'/workspace/demo/{spk}_{emo}_{lv}.wav', wav.squeeze(1), 16000)
 
 
 if __name__ == '__main__':
